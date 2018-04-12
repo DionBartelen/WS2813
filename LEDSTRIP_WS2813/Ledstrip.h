@@ -24,7 +24,7 @@ class Ledstrip {
     void SetSingleSatFast(int pos, int sat);
     void SetAllBri(int bri);
     void SetAllBriFast(int bri);
-    void SetSingleBri(int ps, int sat);
+    void SetSingleBri(int pos, int bri);
     void SetSingleBriFast(int pos, int bri);
     void Update();
     void SetRainbow();

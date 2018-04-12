@@ -23,11 +23,7 @@ char pass[] = "Snorfiets1";
 int i = 0;
 int modi = 0;
 boolean onOff = true;
-unsigned long lastMillis = millis();
-int hours = 0;
-int minutes = 0;
-int seconds = 0;
-int milli = 0;
+
 
 void setup() {
   // put your setup code here, to run once:
@@ -42,31 +38,55 @@ void setup() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  if(modi == 0) {
-      Trail(i, &ledstrip);
-    } else if(modi == 1) {
-      RandomKnipperen(&ledstrip);
-    } else if(modi == 2) {
-      Verspringen(i, &ledstrip);
-    } else if(modi == 3) {
-      TweeTrail(&ledstrip);
-    } else if(modi == 4) {
-      Breathing(i, &ledstrip);
-    } else if(modi == 5) {
-      EenKleur(&ledstrip);
-    } else if (modi == 6) {
-      //Klok(); 
-    }
+  // put your main code here, to run repeatedly: 
   
+  if(i % 2 == 0) {
+      updateTime(); 
+    }
   server.handleClient();
-  Serial.println(WiFi.localIP());
   if(!onOff) {
     ledstrip.TurnOff();
+  } else {
+    HandleMode();
   }
-  UpdateAllLeds();
   delay(10);
   i++;
+}
+
+void HandleMode() {
+  if(modi == 0) {
+      Trail(i, &ledstrip);
+      UpdateAllLeds();
+    } else if(modi == 1) {
+      RandomKnipperen(&ledstrip);
+      UpdateAllLeds();
+    } else if(modi == 2) {
+      Verspringen(i, &ledstrip);
+      UpdateAllLeds();
+    } else if(modi == 3) {
+      TweeTrail(&ledstrip);
+      UpdateAllLeds();
+    } else if(modi == 4) {
+      Breathing(i, &ledstrip);
+      UpdateAllLeds();
+    } else if(modi == 5) {
+      EenKleur(&ledstrip);
+      UpdateAllLeds();
+    } else if (modi == 6) {
+      Klok(&ledstrip); 
+      UpdateAllLeds();
+    } else if(modi == 7) {
+      confetti(leds, &ledstrip, i);
+      FastLED.show();
+    }
+     else if(modi == 8) {
+      bpm(leds, &ledstrip, i);
+      FastLED.show();
+    }
+     else if(modi == 9) {
+      juggle(leds, &ledstrip);
+      FastLED.show();
+    }
 }
 
 void UpdateAllLeds() {
@@ -100,7 +120,7 @@ void serverSetup() {
   server.on("/colormode", clrmodeReceived);
   server.on("/OnOff", onOffReceived);
   server.on("/color", clrReceived);
-//  server.on("/synctime", SyncTimeReceived);
+  server.on("/synctime", SyncTimeReceived);
   server.on("/clr", HueReceived);
   server.on("/sat", SatReceived);
   server.on("/bri", BriReceived);
@@ -133,7 +153,7 @@ void onOffReceived() {
   String st = server.arg("on");
   if(st.toInt() == 1) {
     onOff = true;
-    ledstrip.TurnOn();
+    //ledstrip.TurnOn();//Not all light go on when turned on, only the one for the correct mode
   } else {
     onOff = false;
     ledstrip.TurnOff();
@@ -167,6 +187,7 @@ void SatReceived() {
 void BriReceived() {
   String bri = server.arg("bri");
   int newBri = bri.toInt();
+  ledstrip.maxBrightness = newBri;
   ledstrip.SetAllBri(newBri);
   server.send(200, "text/plain", "OK");
 }
@@ -178,10 +199,7 @@ void SyncTimeReceived() {
   String s = server.arg("s");
   String ms = server.arg("ms");
   modi = 6;
-  hours = h.toInt();
-  minutes = m.toInt();
-  seconds = s.toInt();
-  milli = ms.toInt();
+  SetTime(h.toInt(), m.toInt(), s.toInt(), ms.toInt());
   i = 0;
   server.send(200, "text/plain", "OK");
 }
