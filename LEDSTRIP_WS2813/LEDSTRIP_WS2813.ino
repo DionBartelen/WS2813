@@ -18,7 +18,7 @@ ESP8266WebServer server(80);
 CRGB leds[NUM_LEDS];
 Ledstrip ledstrip = Ledstrip(NUM_LEDS, 255);;
 
-char ssid[] = "Pittige Picanto";
+char ssid[] = "Sjaak Trekhaak";
 char pass[] = "Snorfiets1";
 int i = 0;
 int modi = 0;
@@ -100,8 +100,7 @@ void UpdateAllLeds() {
 }
 
 void wifiSetup() {
-  if (WiFi.status() != WL_CONNECTED) {
-    IPAddress ip(192, 168, 178, 250); // where xx is the desired IP Address
+    IPAddress ip(192, 168, 178, 19); // where xx is the desired IP Address
     IPAddress gateway(192, 168, 178, 1); // set gateway to match your network
     IPAddress subnet(255, 255, 255, 0); // set subnet mask to match your network
     WiFi.config(ip, gateway, subnet);
@@ -111,7 +110,6 @@ void wifiSetup() {
       Serial.print(".");
       delay(50);
     }
-  }
   Serial.println(WiFi.localIP());
 }
 
