@@ -9,21 +9,26 @@
 #define _MAIN
 
 #include <FastLED.h>
+#include<PubSubClient.h>
 #include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
 #include "Ledstrip.h"
 #include "State.h"
 
-ESP8266WebServer server(80);
 CRGB leds[NUM_LEDS];
 Ledstrip ledstrip = Ledstrip(NUM_LEDS, 255);;
 
 char ssid[] = "Sjaak Trekhaak";
 char pass[] = "Snorfiets1";
+char mqtt_server[] = "192.168.178.13";
+char topic[] = "LedstripRamon";
+char message_buff[20];
+
 int i = 0;
 int modi = 0;
 boolean onOff = true;
 
+WiFiClient espClient;
+PubSubClient client(espClient);
 
 void setup() {
   // put your setup code here, to run once:
@@ -33,17 +38,24 @@ void setup() {
   LEDS.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
   FastLED.setBrightness(BRIGHTNESS);
   wifiSetup();
-  serverSetup();
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(onMessageReceived);
+  reconnect();
+  client.subscribe(topic);
   ledstrip.TurnOn();
 }
 
 void loop() {
   // put your main code here, to run repeatedly: 
+
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
   
   if(i % 2 == 0) {
       updateTime(); 
     }
-  server.handleClient();
   if(!onOff) {
     ledstrip.TurnOff();
   } else {
@@ -54,7 +66,7 @@ void loop() {
 }
 
 void HandleMode() {
-  if(modi == 0) {
+    if(modi == 0) {
       Trail(i, &ledstrip);
       UpdateAllLeds();
     } else if(modi == 1) {
@@ -78,12 +90,10 @@ void HandleMode() {
     } else if(modi == 7) {
       confetti(leds, &ledstrip, i);
       FastLED.show();
-    }
-     else if(modi == 8) {
+    } else if(modi == 8) {
       bpm(leds, &ledstrip, i);
       FastLED.show();
-    }
-     else if(modi == 9) {
+    } else if(modi == 9) {
       juggle(leds, &ledstrip);
       FastLED.show();
     }
@@ -99,11 +109,55 @@ void UpdateAllLeds() {
   FastLED.show();
 }
 
+void onMessageReceived(char* topic, byte* payload, unsigned int length) {
+  for(i=0; i<length; i++) {
+    message_buff[i] = payload[i];
+  }
+  message_buff[i] = '\0';
+  String msgString = String(message_buff);
+  
+  if(msgString == "On" or (msgString == "OnOff" && !onOff)) {
+    onOff = true;
+    UpdateAllLeds();
+  } else if(msgString == "Off" or (msgString == "OnOff" && onOff)) {
+    onOff = false;
+    ledstrip.TurnOffFast();
+    UpdateAllLeds();
+  } else if(msgString == "NextMode") {
+    modi +=1;
+    modi = modi % 9;
+  } else if(msgString == "Previous") {
+    modi -=1;
+    modi = modi % 9;
+  } else if(msgString.indexOf("ColorMode") >= 0) { 
+    int number = (msgString.substring(msgString.indexOf(":") + 1).toInt());
+      if(number == 0) {
+        ledstrip.SetRainbow();
+      } else if(number == 1) {
+        ledstrip.SetWhite();
+      }
+  } else if(msgString.indexOf("Mode") >= 0) {
+    modi = (msgString.substring(msgString.indexOf(":") + 1).toInt());
+    i = 0;
+  } else if(msgString.indexOf("Hue") >= 0) {
+    ledstrip.SetAllHue((msgString.substring(msgString.indexOf(":") + 1).toInt()));
+  } else if(msgString.indexOf("Sat") >= 0) {
+    ledstrip.SetAllSat((msgString.substring(msgString.indexOf(":") + 1).toInt()));
+  } else if(msgString.indexOf("Bri") >= 0) {
+    ledstrip.maxBrightness = (msgString.substring(msgString.indexOf(":") + 1).toInt());
+    ledstrip.SetAllBri((msgString.substring(msgString.indexOf(":") + 1).toInt()));
+  } else if(msgString.indexOf("Hours") >= 0) {
+    SetTimeHours((msgString.substring(msgString.indexOf(":") + 1).toInt()));
+  } else if(msgString.indexOf("Minutes") >= 0) {
+    SetTimeMinutes((msgString.substring(msgString.indexOf(":") + 1).toInt()));
+  } else if(msgString.indexOf("Seconds") >= 0) {
+    SetTimeSeconds((msgString.substring(msgString.indexOf(":") + 1).toInt()));
+  } else {
+    Serial.println(msgString);
+  }
+}
+
 void wifiSetup() {
-    IPAddress ip(192, 168, 178, 19); // where xx is the desired IP Address
-    IPAddress gateway(192, 168, 178, 1); // set gateway to match your network
-    IPAddress subnet(255, 255, 255, 0); // set subnet mask to match your network
-    WiFi.config(ip, gateway, subnet);
     WiFi.hostname("LEDStripRamon");
     WiFi.begin(ssid, pass);
     while(WiFi.status() != WL_CONNECTED) {
@@ -113,102 +167,21 @@ void wifiSetup() {
   Serial.println(WiFi.localIP());
 }
 
-void serverSetup() {
-  server.on("/command", commandReceived);
-  server.on("/colormode", clrmodeReceived);
-  server.on("/OnOff", onOffReceived);
-  server.on("/color", clrReceived);
-  server.on("/synctime", SyncTimeReceived);
-  server.on("/clr", HueReceived);
-  server.on("/sat", SatReceived);
-  server.on("/bri", BriReceived);
-  server.on("/stat", StatusReceived);
-  //end
-  server.begin();
-}
-
-void commandReceived() {
-  String command = server.arg("command");
-  modi = command.toInt();
-  Serial.print("Command received: ");
-  Serial.println(command);
-  server.send(200, "text/plain", "OK");
-  i = 0;
-}
-
-void clrmodeReceived() {
-  String command = server.arg("colormode");
-  int clrMode = command.toInt();
-  if(clrMode == 0) {
-    ledstrip.SetRainbow();
-  } else if(clrMode == 1) {
-    ledstrip.SetWhite();
+void reconnect() {
+  if(WiFi.status() != WL_CONNECTED) {
+    wifiSetup();
   }
-  server.send(200, "text/plain", "OK");
-}
-
-void onOffReceived() {
-  String st = server.arg("on");
-  if(st.toInt() == 1) {
-    onOff = true;
-    //ledstrip.TurnOn();//Not all light go on when turned on, only the one for the correct mode
-  } else {
-    onOff = false;
-    ledstrip.TurnOff();
+  while (!client.connected()) {
+    Serial.print("Connecting to MQTT broker ...");
+    if (client.connect("LedstripRamon")) {
+      Serial.println("OK");
+    } else {
+      Serial.print("KO, error : ");
+      Serial.print(client.state());
+      Serial.println(" Wait 5 secondes before to retry");
+      delay(5000);
+    }
   }
-  UpdateAllLeds();
-  server.send(200, "text/plain", "OK");
-}
-
-void clrReceived() {
-  String hue = server.arg("hue");
-  String sat = server.arg("sat");
-  String bri = server.arg("bri");
-  ledstrip.SetAllColor(hue.toInt(), sat.toInt(), bri.toInt());
-  server.send(200, "text/plain", "OK");
-}
-
-void HueReceived() {
-  String hue = server.arg("hue");
-  int newHue = hue.toInt();
-  ledstrip.SetAllHue(newHue);
-  server.send(200, "text/plain", "OK");
-}
-
-void SatReceived() {
-  String sat = server.arg("sat");
-  int newSat = sat.toInt();
-  ledstrip.SetAllSat(newSat);
-  server.send(200, "text/plain", "OK");
-}
-
-void BriReceived() {
-  String bri = server.arg("bri");
-  int newBri = bri.toInt();
-  ledstrip.maxBrightness = newBri;
-  ledstrip.SetAllBri(newBri);
-  server.send(200, "text/plain", "OK");
-}
-
-void SyncTimeReceived() {
-  Serial.println("Time received");
-  String h = server.arg("h");
-  String m = server.arg("m");
-  String s = server.arg("s");
-  String ms = server.arg("ms");
-  modi = 6;
-  SetTime(h.toInt(), m.toInt(), s.toInt(), ms.toInt());
-  i = 0;
-  server.send(200, "text/plain", "OK");
-}
-
-void StatusReceived() {
-  int maxBri = ledstrip.maxBrightness;
-  String a = "{\"mod\":\"" + modi;
-  String b = "\", \"maxBri\":\"";
-  String c = maxBri + "\"}";
-  String d = a + b + c;
-  server.send(200, "text/plain", d);
 }
 
 #endif

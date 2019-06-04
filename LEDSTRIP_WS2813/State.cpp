@@ -89,8 +89,20 @@ void SetTime(int hours, int minutes, int seconds, int milliseconds) {
   klokMilli = milliseconds;
   klokSeconds = seconds;
   klokMinutes = minutes;
+  klokHours = hours; 
+}
+
+void SetTimeHours(int hours) {
   klokHours = hours;
-  
+}
+void SetTimeMinutes(int minutes) {
+  klokMinutes = minutes;
+}
+void SetTimeSeconds(int seconds) {
+  klokSeconds = seconds;
+}
+void SetTimeMillis(int milliseconds) {
+  klokMilli = milliseconds;
 }
 
 void Klok(Ledstrip *ledstrip) {
